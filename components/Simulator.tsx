@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ResultsChart } from "./ResultsChart"
 import { Loader2 } from "lucide-react"
+import { getApiUrl } from "@/lib/api"
 
 export function Simulator() {
   const [symbol, setSymbol] = useState("JEPQ")
@@ -16,19 +17,17 @@ export function Simulator() {
   const [startDate, setStartDate] = useState("2023-01-01")
   const [currency, setCurrency] = useState("USD")
   
-  // Estado para mostrar preço atual enquanto preenche
   const [currentPriceInfo, setCurrentPriceInfo] = useState<number | null>(null)
   const [fetchingPrice, setFetchingPrice] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
 
-  // Busca preço para ajudar o usuário
   const handleSymbolBlur = async () => {
     if(!symbol) return
     setFetchingPrice(true)
     try {
-        const res = await fetch(`http://127.0.0.1:8000/api/price/${symbol}`)
+        const res = await fetch(getApiUrl(`/api/price/${symbol}`))
         const data = await res.json()
         if (data.current_price) setCurrentPriceInfo(data.current_price)
     } catch(e) { setCurrentPriceInfo(null) } 
@@ -38,7 +37,7 @@ export function Simulator() {
   const handleSimulate = async () => {
     setLoading(true)
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/simulation", {
+      const response = await fetch(getApiUrl('/api/simulation'), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

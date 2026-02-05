@@ -11,9 +11,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { TrendingUp, TrendingDown } from "lucide-react"
+import { getApiUrl } from "@/lib/api"
 
 interface Asset { id: number; symbol: string; quantity: number; price_paid: number; purchase_date: string; asset_type: string; currency: string; }
 interface RealPortfolioProps { onUpdate?: () => void }
+
 
 export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
   const [assets, setAssets] = useState<Asset[]>([])
@@ -44,7 +46,7 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
 
   const fetchDollarRate = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/price/BRL=X")
+      const res = await fetch(getApiUrl('/api/price/BRL=X'))
       const data = await res.json()
       if (data.current_price) setUsdPrice(data.current_price)
     } catch (e) { }
@@ -52,7 +54,7 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
 
   const fetchPortfolio = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/portfolio")
+      const res = await fetch(getApiUrl('/api/portfolio'))
       const data = await res.json()
       setAssets(data)
     } catch (error) { }
@@ -68,7 +70,7 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
         continue
       }
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/price/${sym}`)
+        const res = await fetch(getApiUrl(`/api/price/${sym}`))
         const data = await res.json()
         if (data.current_price) newPrices[sym] = data.current_price
       } catch (e) { console.error(`Erro preço ${sym}`) }
@@ -81,21 +83,21 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
     setFetchingPrice(true)
     try {
       let ticker = newSymbol.toUpperCase()
-      const res = await fetch(`http://127.0.0.1:8000/api/price/${ticker}`)
+      const res = await fetch(getApiUrl(`/api/price/${ticker}`))
       const data = await res.json()
       if (data.current_price) setNewPrice(data.current_price.toFixed(2))
     } catch (e) { } finally { setFetchingPrice(false) }
   }
 
   const handleDelete = async (id: number) => {
-    try { await fetch(`http://127.0.0.1:8000/api/portfolio/${id}`, { method: "DELETE" }); fetchPortfolio(); if(onUpdate) onUpdate() } catch (e) { alert("Erro") }
+    try { await fetch(getApiUrl(`/api/portfolio/${id}`), { method: "DELETE" }); fetchPortfolio(); if(onUpdate) onUpdate() } catch (e) { alert("Erro") }
   }
 
   const handleSave = async () => {
     if (!newSymbol || !newQty || !newPrice || !newDate) { alert("Preencha tudo!"); return }
     setLoading(true)
     try {
-      await fetch("http://127.0.0.1:8000/api/portfolio/add", {
+      await fetch(getApiUrl('/api/portfolio/add'), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbol: newSymbol.toUpperCase(), quantity: Number(newQty), price_paid: Number(newPrice), purchase_date: newDate, asset_type: newType, currency: newCurrency }),

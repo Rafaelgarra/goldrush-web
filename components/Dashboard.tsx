@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { getApiUrl } from "@/lib/api"
 
 const COLORS: Record<string, string> = { "FII": "#fbbf24", "Ação": "#3b82f6", "ETF": "#8b5cf6", "Cripto": "#10b981", "Caixa": "#22c55e", "Outros": "#71717a" }
 
@@ -20,7 +20,7 @@ export function Dashboard({ assets }: DashboardProps) {
 
   async function fetchDollar() {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/price/BRL=X")
+      const res = await fetch(getApiUrl('/api/price/BRL=X'))
       const data = await res.json()
       if (data.current_price) setUsdPrice(data.current_price)
     } catch (e) { setUsdPrice(5.80) }
@@ -35,7 +35,7 @@ export function Dashboard({ assets }: DashboardProps) {
         newPrices[sym] = 1; continue
       }
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/price/${sym}`)
+        const res = await fetch(getApiUrl(`/api/price/${sym}`))
         const data = await res.json()
         if (data.current_price) newPrices[sym] = data.current_price
       } catch (e) { }
