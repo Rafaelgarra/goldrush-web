@@ -6,6 +6,7 @@ import { RealPortfolio } from "@/components/RealPortfolio"
 import { Simulator } from "@/components/Simulator"
 import { Dashboard } from "@/components/Dashboard"
 import { getApiUrl } from "@/lib/api"
+import CurrencyTicker from "@/components/CurrencyTicker";
 
 export default function Home() {
   const [portfolioData, setPortfolioData] = useState([])
@@ -24,12 +25,21 @@ export default function Home() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-8">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-amber-400 tracking-tighter">
+        {/* --- CABEÇALHO (Título + Ticker) --- */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-start gap-6 mb-8 w-full">
+          
+          {/* Título: Fixo, não encolhe (shrink-0) */}
+          <h1 className="text-3xl font-bold text-amber-400 tracking-tighter whitespace-nowrap shrink-0">
             GoldRush <span className="text-zinc-600 text-lg font-normal">| Manager</span>
           </h1>
+
+          {/* Ticker: Ocupa todo o espaço restante (flex-1) e permite scroll (min-w-0) */}
+          <div className="flex-1 min-w-0 w-full overflow-hidden">
+            <CurrencyTicker />
+          </div>
+
         </div>
+        {/* ----------------------------------- */}
 
         {/* MENU PRINCIPAL (Abas) */}
         <Tabs defaultValue="dashboard" className="w-full">
@@ -61,7 +71,6 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="portfolio" className="mt-6 animate-in fade-in slide-in-from-bottom-4">
-            {/* Passamos refreshData para atualizar o Dashboard assim que adicionar algo novo */}
             <RealPortfolio onUpdate={refreshData} />
           </TabsContent>
 

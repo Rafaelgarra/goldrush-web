@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getApiUrl } from "@/lib/api"
+// Removido: import CurrencyTicker (ele vai para o layout agora)
 
 const COLORS: Record<string, string> = { "FII": "#fbbf24", "Ação": "#3b82f6", "ETF": "#8b5cf6", "Cripto": "#10b981", "Caixa": "#22c55e", "Outros": "#71717a" }
 
@@ -71,13 +72,12 @@ export function Dashboard({ assets }: DashboardProps) {
     return { totalInvested, totalCurrent, chartData }
   }, [assets, usdPrice, marketPrices])
 
-  // Custom Tooltip com Tri-State Colors
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
       const profit = data.profit
       
-      let colorClass = "text-zinc-400" // Cor Neutra (Cinza/Branco)
+      let colorClass = "text-zinc-400"
       let label = "Neutro"
       let sign = ""
 
@@ -109,7 +109,9 @@ export function Dashboard({ assets }: DashboardProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pt-4"> 
+      {/* Removido o Header daqui. O pt-4 dá um respiro se necessário */}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-zinc-900 border-zinc-800 md:col-span-2">
           <CardHeader className="pb-2"><CardTitle className="text-zinc-400 text-sm flex items-center gap-2">Patrimônio Real (Mercado) {usdPrice === 0 && <span className="text-xs text-amber-500 animate-pulse">Calculando...</span>}</CardTitle></CardHeader>
@@ -118,10 +120,9 @@ export function Dashboard({ assets }: DashboardProps) {
             <p className="text-zinc-500 text-sm mt-1">
               Investido: R$ {stats.totalInvested.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} 
               
-              {/* Lógica de Cor Tri-State do Card Principal */}
               {(() => {
                   const profit = stats.totalCurrent - stats.totalInvested;
-                  let color = "text-white"; // Neutro
+                  let color = "text-white";
                   let sign = "";
                   
                   if (profit > 0.01) { color = "text-green-500"; sign = "+"; }
