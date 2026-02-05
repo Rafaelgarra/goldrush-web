@@ -5,13 +5,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RealPortfolio } from "@/components/RealPortfolio"
 import { Simulator } from "@/components/Simulator"
 import { Dashboard } from "@/components/Dashboard"
+import { getApiUrl } from "@/lib/api"
 
 export default function Home() {
   const [portfolioData, setPortfolioData] = useState([])
 
   const refreshData = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/portfolio")
+      const res = await fetch(getApiUrl('/api/portfolio'))
       const data = await res.json()
       setPortfolioData(data)
     } catch (e) { console.error(e) }
