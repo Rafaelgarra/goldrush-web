@@ -1,186 +1,143 @@
 "use client"
 
 import { useMemo, useState, useEffect } from "react"
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { authFetch, getApiUrl } from "@/lib/api"
-// Removido: import CurrencyTicker (ele vai para o layout agora)
+import { DollarSign, TrendingUp, Wallet, PieChart, BarChart3 } from "lucide-react"
+import { getApiUrl } from "@/lib/api"
+import { Separator } from "@/components/ui/separator"
 
-const COLORS: Record<string, string> = { "FII": "#fbbf24", "Ação": "#3b82f6", "ETF": "#8b5cf6", "Cripto": "#10b981", "Caixa": "#22c55e", "Outros": "#71717a" }
-
-interface DashboardProps { assets: any[] }
+interface DashboardProps {
+  assets: any[]
+}
 
 export function Dashboard({ assets }: DashboardProps) {
-  const [usdPrice, setUsdPrice] = useState<number>(0)
-  const [marketPrices, setMarketPrices] = useState<Record<string, number>>({})
+  const safeAssets = Array.isArray(assets) ? assets : []
+  const [prices, setPrices] = useState<Record<string, number>>({})
+  const [usdPrice, setUsdPrice] = useState(5.80) // Valor padrão caso API falhe
 
+  // 1. Busca cotação do Dólar e Preços dos Ativos
   useEffect(() => {
-    fetchDollar()
-    if (assets.length > 0) updateMarketPrices()
-  }, [assets])
+    const fetchData = async () => {
+        // Dólar
+        try {
+            const res = await fetch(getApiUrl("/api/price/BRL=X"))
+            const data = await res.json()
+            if (data.current_price) setUsdPrice(data.current_price)
+        } catch(e) {}
 
-  async function fetchDollar() {
-    try {
-      const res = await authFetch(getApiUrl('/api/price/BRL=X'))
-      const data = await res.json()
-      if (data.current_price) setUsdPrice(data.current_price)
-    } catch (e) { setUsdPrice(5.80) }
-  }
-
-  const updateMarketPrices = async () => {
-    const symbols = [...new Set(assets.map(a => a.symbol))]
-    const newPrices: Record<string, number> = {}
-    
-    for (const sym of symbols) {
-      if (sym === 'BRL' || sym === 'USD' || assets.find(a => a.symbol === sym)?.asset_type === 'Caixa') {
-        newPrices[sym] = 1; continue
-      }
-      try {
-        const res = await authFetch(getApiUrl(`/api/price/${sym}`))
-        const data = await res.json()
-        if (data.current_price) newPrices[sym] = data.current_price
-      } catch (e) { }
+        // Preços dos Ativos (Para os Cards funcionarem)
+        const newPrices: Record<string, number> = {}
+        const promises = safeAssets.map(async (asset) => {
+             if (newPrices[asset.symbol]) return;
+             try {
+                 const res = await fetch(getApiUrl(`/api/price/${asset.symbol}`))
+                 const data = await res.json()
+                 if (data.current_price) newPrices[asset.symbol] = data.current_price
+             } catch (e) {}
+        })
+        await Promise.all(promises)
+        setPrices(newPrices)
     }
-    setMarketPrices(prev => ({ ...prev, ...newPrices }))
-  }
+    
+    if (safeAssets.length > 0) fetchData()
+  }, [safeAssets])
 
+  // 2. Cálculos Poderosos
   const stats = useMemo(() => {
-    const rate = usdPrice || 0
     let totalInvested = 0
     let totalCurrent = 0
+    
+    const distribution: Record<string, number> = {}
 
-    const distribution = assets.reduce((acc: any, item) => {
+    safeAssets.forEach(item => {
+      // Pega preço atual (ou usa o preço pago se a API falhar, pra não zerar tudo)
+      const currentPrice = prices[item.symbol] || item.price_paid
+      const rate = item.currency === "USD" ? usdPrice : 1
+
+      // Total Investido (Custo)
+      totalInvested += (item.quantity * item.price_paid) * rate
+      
+      // Total Atual (Valor de Mercado)
+      const marketValue = (item.quantity * currentPrice) * rate
+      totalCurrent += marketValue
+
+      // Distribuição por Tipo
       const type = item.asset_type || "Outros"
-      const currencyMultiplier = item.currency === "USD" ? rate : 1
-      
-      const itemInvested = (item.quantity * item.price_paid) * currencyMultiplier
-      totalInvested += itemInvested
+      distribution[type] = (distribution[type] || 0) + marketValue
+    })
 
-      const currentPrice = marketPrices[item.symbol] || item.price_paid
-      const itemCurrent = (item.quantity * currentPrice) * currencyMultiplier
-      totalCurrent += itemCurrent
+    const profit = totalCurrent - totalInvested
+    const profitPercent = totalInvested > 0 ? (profit / totalInvested) * 100 : 0
 
-      if (!acc[type]) acc[type] = { name: type, value: 0, invested: 0, profit: 0 }
-      acc[type].value += itemCurrent
-      acc[type].invested += itemInvested
-      acc[type].profit += (itemCurrent - itemInvested)
-
-      return acc
-    }, {})
-
-    const chartData = Object.values(distribution)
-    return { totalInvested, totalCurrent, chartData }
-  }, [assets, usdPrice, marketPrices])
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload
-      const profit = data.profit
-      
-      let colorClass = "text-zinc-400"
-      let label = "Neutro"
-      let sign = ""
-
-      if (profit > 0.01) {
-          colorClass = "text-green-600"
-          label = "Lucro"
-          sign = "+"
-      } else if (profit < -0.01) {
-          colorClass = "text-red-600"
-          label = "Preju"
-      }
-
-      return (
-        <div className="bg-white border border-zinc-200 p-3 rounded-lg shadow-lg">
-          <p className="font-bold text-zinc-900 mb-1">{data.name}</p>
-          <div className="text-sm text-zinc-600">
-            Total: <span className="font-bold">R$ {data.value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
-          </div>
-          <div className="text-xs text-zinc-500 mt-1 pt-1 border-t border-zinc-100">
-            Investido: R$ {data.invested.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-          </div>
-          <div className={`text-xs font-bold ${colorClass}`}>
-            {label}: {sign} R$ {profit.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-          </div>
-        </div>
-      )
-    }
-    return null
-  }
+    return { totalInvested, totalCurrent, profit, profitPercent, distribution }
+  }, [safeAssets, prices, usdPrice])
 
   return (
-    <div className="space-y-6 pt-4"> 
-      {/* Removido o Header daqui. O pt-4 dá um respiro se necessário */}
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-zinc-900 border-zinc-800 md:col-span-2">
-          <CardHeader className="pb-2"><CardTitle className="text-zinc-400 text-sm flex items-center gap-2">Patrimônio Real (Mercado) {usdPrice === 0 && <span className="text-xs text-amber-500 animate-pulse">Calculando...</span>}</CardTitle></CardHeader>
+    <div className="space-y-6">
+      {/* CARDS DE RESUMO */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-400">Total Investido</CardTitle>
+            <Wallet className="h-4 w-4 text-zinc-500" />
+          </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold text-white">R$ {stats.totalCurrent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-            <p className="text-zinc-500 text-sm mt-1">
-              Investido: R$ {stats.totalInvested.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} 
-              
-              {(() => {
-                  const profit = stats.totalCurrent - stats.totalInvested;
-                  let color = "text-white";
-                  let sign = "";
-                  
-                  if (profit > 0.01) { color = "text-green-500"; sign = "+"; }
-                  else if (profit < -0.01) { color = "text-red-500"; }
-                  
-                  return (
-                      <span className={`ml-2 font-bold ${color}`}>
-                        ({sign} R$ {profit.toLocaleString('pt-BR', { maximumFractionDigits: 2 })})
-                      </span>
-                  )
-              })()}
-
-            </p>
+            <div className="text-2xl font-bold text-white">R$ {stats.totalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+            <p className="text-xs text-zinc-500">Custo de aquisição</p>
           </CardContent>
         </Card>
 
         <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-2"><CardTitle className="text-zinc-400 text-sm">Total de Ativos</CardTitle></CardHeader>
-          <CardContent><div className="text-4xl font-bold text-amber-400">{assets.length}</div><p className="text-zinc-500 text-sm mt-1">posições abertas</p></CardContent>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-400">Patrimônio Atual</CardTitle>
+            <DollarSign className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-400">R$ {stats.totalCurrent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+            <p className="text-xs text-zinc-500">Valor de mercado hoje</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-400">Lucro / Prejuízo</CardTitle>
+            <TrendingUp className={`h-4 w-4 ${stats.profit >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${stats.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              R$ {Math.abs(stats.profit).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <p className={`text-xs ${stats.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {stats.profit >= 0 ? '+' : ''}{stats.profitPercent.toFixed(2)}% de retorno
+            </p>
+          </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="bg-zinc-900 border-zinc-800 h-[400px]">
-          <CardHeader><CardTitle className="text-white">Alocação Atual (Valor de Mercado)</CardTitle></CardHeader>
-          <CardContent className="h-[320px]">
-            {stats.chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={stats.chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value" stroke="none">
-                    {stats.chartData.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[entry.name] || COLORS["Outros"]} />
+      {/* DETALHES VISUAIS */}
+      <div className="grid gap-4 md:grid-cols-2">
+         <Card className="bg-zinc-900 border-zinc-800">
+            <CardHeader><CardTitle className="flex gap-2 items-center text-zinc-100"><PieChart className="w-4 h-4"/> Alocação</CardTitle></CardHeader>
+            <CardContent>
+                <div className="space-y-2">
+                    {Object.entries(stats.distribution).map(([type, value]) => (
+                        <div key={type} className="flex items-center justify-between">
+                            <span className="text-sm uppercase text-zinc-400 font-bold">{type}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-white">R$ {value.toLocaleString('pt-BR', {maximumFractionDigits: 0})}</span>
+                                <div className="h-2 w-20 bg-zinc-800 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-amber-500" 
+                                        style={{ width: `${(value / stats.totalCurrent) * 100}%` }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle"/>
-                </PieChart>
-              </ResponsiveContainer>
-            ) : ( <div className="flex h-full items-center justify-center text-zinc-500">Carteira vazia</div> )}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900 border-zinc-800 h-[400px] overflow-auto">
-          <CardHeader><CardTitle className="text-white">Últimas Movimentações</CardTitle></CardHeader>
-          <CardContent>
-             <div className="space-y-4">
-                {assets.slice().reverse().slice(0, 5).map((asset, i) => (
-                  <div key={i} className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                    <div><div className="font-bold text-white">{asset.symbol}</div><div className="text-xs text-zinc-500">{new Date(asset.purchase_date).toLocaleDateString()}</div></div>
-                    <div className="text-right">
-                      <div className="font-bold text-amber-400">{asset.currency === 'USD' ? '$' : 'R$'} {(asset.quantity * asset.price_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                      <div className="text-xs text-zinc-400">{asset.asset_type}</div>
-                    </div>
-                  </div>
-                ))}
-             </div>
-          </CardContent>
-        </Card>
+                    {Object.keys(stats.distribution).length === 0 && <p className="text-zinc-500 text-sm">Sem dados.</p>}
+                </div>
+            </CardContent>
+         </Card>
       </div>
     </div>
   )
