@@ -20,12 +20,14 @@ export function Dashboard({ assets }: DashboardProps) {
 
   useEffect(() => {
     const fetchData = async () => {
+        // 1. Busca Dólar
         try {
             const res = await fetch(getApiUrl("/api/price/BRL=X"))
             const data = await res.json()
             if (data.current_price) setUsdPrice(data.current_price)
         } catch(e) {}
 
+        // 2. Busca Preços dos Ativos
         const newPrices: Record<string, number> = {}
         const promises = safeAssets.map(async (asset) => {
              if (newPrices[asset.symbol]) return;
@@ -63,7 +65,7 @@ export function Dashboard({ assets }: DashboardProps) {
     const profit = totalCurrent - totalInvested
     const profitPercent = totalInvested > 0 ? (profit / totalInvested) * 100 : 0
 
-    // Converte objeto para array do gráfico [ {name: 'stock', value: 100}, ... ]
+    // Prepara dados para o Gráfico
     const chartData = Object.entries(distribution).map(([name, value]) => ({
         name: name.toUpperCase(),
         value: value
@@ -114,7 +116,7 @@ export function Dashboard({ assets }: DashboardProps) {
         </Card>
       </div>
 
-      {/* --- GRÁFICO DONUT (VOLTOU!) --- */}
+      {/* --- GRÁFICO DONUT --- */}
       <div className="grid gap-4 md:grid-cols-2">
          <Card className="bg-zinc-900 border-zinc-800 shadow-lg">
             <CardHeader>
@@ -143,7 +145,8 @@ export function Dashboard({ assets }: DashboardProps) {
                                 </Pie>
                                 <Tooltip 
                                     contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff' }}
-                                    formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', {maximumFractionDigits: 0})}`}
+                                    // AQUI ESTA A CORREÇÃO (value: any)
+                                    formatter={(value: any) => `R$ ${Number(value).toLocaleString('pt-BR', {maximumFractionDigits: 0})}`}
                                 />
                                 <Legend verticalAlign="bottom" height={36} iconType="circle"/>
                             </PieChart>
