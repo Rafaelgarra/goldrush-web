@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { PlusCircle, Wallet, RefreshCw, ArrowUp, ArrowDown, Trash2 } from "lucide-react" // <--- Importei Trash2
+import { PlusCircle, Wallet, RefreshCw, ArrowUp, ArrowDown, Trash2, Pencil, X } from "lucide-react" // <--- Adicionei Pencil e X
 import { getApiUrl, authFetch } from "@/lib/api"
 
 interface Asset {
@@ -30,6 +30,9 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
   const [loadingPrices, setLoadingPrices] = useState(false)
   const [searchingTicker, setSearchingTicker] = useState(false)
   
+  // --- NOVO ESTADO: ID DO ITEM SENDO EDITADO ---
+  const [editingId, setEditingId] = useState<number | null>(null)
+
   const [newAsset, setNewAsset] = useState({
     symbol: "",
     quantity: "",
@@ -51,7 +54,8 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
           if (data.current_price) {
               setNewAsset(prev => ({
                   ...prev,
-                  price_paid: data.current_price.toString(),
+                  // Só preenche o preço se estiver criando, ou se o usuário quiser atualizar
+                  price_paid: editingId ? prev.price_paid : data.current_price.toString(),
                   symbol: data.symbol 
               }));
           }
@@ -84,10 +88,8 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
       const promises = currentAssets.map(async (asset) => {
           try {
             if (newPrices[asset.symbol]) return;
-
             const res = await fetch(getApiUrl(`/api/price/${asset.symbol}`))
             const data = await res.json()
-            
             if (data.current_price) {
                 newPrices[data.symbol] = data.current_price
                 newPrices[asset.symbol] = data.current_price 
@@ -102,7 +104,8 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
 
   useEffect(() => { loadAssets() }, [])
 
-  const handleAddAsset = async () => {
+  // --- FUNÇÃO INTELIGENTE: SALVAR OU EDITAR ---
+  const handleSaveAsset = async () => {
     if (!newAsset.symbol || !newAsset.quantity || !newAsset.price_paid) {
         alert("Preencha todos os campos!")
         return
@@ -118,14 +121,25 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
           currency: newAsset.currency
       }
 
-      const res = await authFetch(getApiUrl("/api/portfolio"), {
-          method: "POST",
-          body: JSON.stringify(payload)
-      })
+      let res;
+      if (editingId) {
+          // MODO EDIÇÃO (PUT)
+          res = await authFetch(getApiUrl(`/api/portfolio/${editingId}`), {
+              method: "PUT",
+              body: JSON.stringify(payload)
+          })
+      } else {
+          // MODO CRIAÇÃO (POST)
+          res = await authFetch(getApiUrl("/api/portfolio"), {
+              method: "POST",
+              body: JSON.stringify(payload)
+          })
+      }
 
       if (!res.ok) throw new Error("Erro ao salvar")
 
-      setNewAsset({ ...newAsset, symbol: "", quantity: "", price_paid: "" })
+      // Limpa tudo após sucesso
+      resetForm();
       await loadAssets() 
       if (onUpdate) onUpdate() 
       
@@ -136,37 +150,48 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
     }
   }
 
-  // --- NOVA FUNÇÃO: DELETAR ---
   const handleDelete = async (id: number, symbol: string) => {
-      if (!confirm(`Tem certeza que deseja excluir ${symbol} da carteira?`)) return;
-
+      if (!confirm(`Tem certeza que deseja excluir ${symbol}?`)) return;
       try {
-          const res = await authFetch(getApiUrl(`/api/portfolio/${id}`), {
-              method: "DELETE"
-          });
-
+          const res = await authFetch(getApiUrl(`/api/portfolio/${id}`), { method: "DELETE" });
           if (res.ok) {
-              await loadAssets(); // Recarrega a lista
-              if (onUpdate) onUpdate(); // Atualiza os gráficos gerais
-          } else {
-              alert("Erro ao excluir ativo.");
+              await loadAssets(); 
+              if (onUpdate) onUpdate();
+              // Se deletou o item que estava editando, limpa o form
+              if (editingId === id) resetForm();
           }
-      } catch (error) {
-          console.error("Erro ao deletar:", error);
-      }
+      } catch (error) { console.error(error); }
+  };
+
+  // --- PREPARA O FORMULÁRIO PARA EDIÇÃO ---
+  const handleEditClick = (asset: Asset) => {
+      setEditingId(asset.id);
+      setNewAsset({
+          symbol: asset.symbol,
+          quantity: asset.quantity.toString(),
+          price_paid: asset.price_paid.toString(),
+          asset_type: asset.asset_type,
+          currency: asset.currency
+      });
+  };
+
+  const resetForm = () => {
+      setEditingId(null);
+      setNewAsset({ symbol: "", quantity: "", price_paid: "", asset_type: "stock", currency: "BRL" });
   };
 
   return (
     <div className="grid gap-6 md:grid-cols-12">
       
-      {/* FORMULÁRIO (ESQUERDA) */}
-      <Card className="md:col-span-4 bg-zinc-900 border-zinc-800 h-fit">
+      {/* --- FORMULÁRIO (ESQUERDA) --- */}
+      <Card className={`md:col-span-4 border-zinc-800 h-fit transition-colors ${editingId ? 'bg-zinc-900 border-amber-500/50' : 'bg-zinc-900'}`}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-amber-400">
-             <PlusCircle className="w-5 h-5" /> Adicionar Ativo
+             {editingId ? <Pencil className="w-5 h-5" /> : <PlusCircle className="w-5 h-5" />}
+             {editingId ? "Editar Ativo" : "Adicionar Ativo"}
           </CardTitle>
           <CardDescription className="text-zinc-500">
-             Digite o Ticker e aperte Tab para buscar o preço.
+             {editingId ? `Alterando dados de ${newAsset.symbol}` : "Registre suas compras ou edite ao lado."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -237,15 +262,30 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
                 </Select>
              </div>
           </div>
-
-          <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold mt-4" onClick={handleAddAsset} disabled={loading}>
-            {loading ? "Salvando..." : "Registrar Compra"}
-          </Button>
+          
+          <div className="flex gap-2 mt-4">
+            {editingId && (
+                <Button 
+                    variant="outline" 
+                    className="flex-1 border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                    onClick={resetForm}
+                >
+                    <X className="w-4 h-4 mr-2" /> Cancelar
+                </Button>
+            )}
+            <Button 
+                className={`flex-1 font-bold text-black ${editingId ? 'bg-blue-500 hover:bg-blue-600' : 'bg-amber-500 hover:bg-amber-600'}`} 
+                onClick={handleSaveAsset} 
+                disabled={loading}
+            >
+                {loading ? "Salvando..." : (editingId ? "Salvar Alterações" : "Registrar Compra")}
+            </Button>
+          </div>
 
         </CardContent>
       </Card>
 
-      {/* LISTA (DIREITA) */}
+      {/* --- LISTA (DIREITA) --- */}
       <Card className="md:col-span-8 bg-zinc-900 border-zinc-800">
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-zinc-100">
@@ -268,7 +308,7 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
                             <TableHead className="text-zinc-400">Atual</TableHead>
                             <TableHead className="text-zinc-400">Total</TableHead>
                             <TableHead className="text-zinc-400">Var %</TableHead>
-                            <TableHead className="text-zinc-400 text-right">Ações</TableHead> {/* Coluna Nova */}
+                            <TableHead className="text-zinc-400 text-right">Ações</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -302,16 +342,28 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
                                             </div>
                                         )}
                                     </TableCell>
-                                    {/* --- BOTÃO DE DELETAR --- */}
                                     <TableCell className="text-right">
-                                        <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-8 w-8 text-zinc-500 hover:text-red-500 hover:bg-red-500/10"
-                                            onClick={() => handleDelete(asset.id, asset.symbol)}
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </Button>
+                                        <div className="flex justify-end gap-1">
+                                            {/* BOTÃO EDITAR */}
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-8 w-8 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10"
+                                                onClick={() => handleEditClick(asset)}
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </Button>
+
+                                            {/* BOTÃO DELETAR */}
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-8 w-8 text-zinc-500 hover:text-red-500 hover:bg-red-500/10"
+                                                onClick={() => handleDelete(asset.id, asset.symbol)}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             )
