@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { PlusCircle, Wallet, RefreshCw, ArrowUp, ArrowDown, Search } from "lucide-react"
+import { PlusCircle, Wallet, RefreshCw, ArrowUp, ArrowDown, Trash2 } from "lucide-react" // <--- Importei Trash2
 import { getApiUrl, authFetch } from "@/lib/api"
 
 interface Asset {
@@ -30,7 +30,6 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
   const [loadingPrices, setLoadingPrices] = useState(false)
   const [searchingTicker, setSearchingTicker] = useState(false)
   
-  // Estado do Formulário
   const [newAsset, setNewAsset] = useState({
     symbol: "",
     quantity: "",
@@ -39,24 +38,21 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
     currency: "BRL"
   })
 
-  // --- NOVA FUNÇÃO: BUSCAR PREÇO AO DIGITAR ---
+  // --- BUSCAR PREÇO AO DIGITAR (TAB) ---
   const handleTickerBlur = async () => {
       const ticker = newAsset.symbol.trim();
       if (!ticker) return;
 
       setSearchingTicker(true);
       try {
-          // Busca o preço na API
           const res = await fetch(getApiUrl(`/api/price/${ticker}`));
           const data = await res.json();
 
           if (data.current_price) {
-              // 1. Atualiza o preço sugerido no formulário
-              // 2. Atualiza o Símbolo para o oficial (ex: MXRF11 -> MXRF11.SA)
               setNewAsset(prev => ({
                   ...prev,
-                  price_paid: data.current_price.toString(), // Preenche o input
-                  symbol: data.symbol // Corrige o nome
+                  price_paid: data.current_price.toString(),
+                  symbol: data.symbol 
               }));
           }
       } catch (error) {
@@ -87,16 +83,13 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
       
       const promises = currentAssets.map(async (asset) => {
           try {
-            // Evita buscar repetido
             if (newPrices[asset.symbol]) return;
 
             const res = await fetch(getApiUrl(`/api/price/${asset.symbol}`))
             const data = await res.json()
             
-            // O segredo: Usamos a chave QUE O BACKEND DEVOLVEU (data.symbol)
             if (data.current_price) {
                 newPrices[data.symbol] = data.current_price
-                // Se o backend corrigiu o nome (ex: adicionou .SA), salvamos também com o nome original pra garantir
                 newPrices[asset.symbol] = data.current_price 
             }
           } catch (e) { console.error(e) }
@@ -143,9 +136,30 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
     }
   }
 
+  // --- NOVA FUNÇÃO: DELETAR ---
+  const handleDelete = async (id: number, symbol: string) => {
+      if (!confirm(`Tem certeza que deseja excluir ${symbol} da carteira?`)) return;
+
+      try {
+          const res = await authFetch(getApiUrl(`/api/portfolio/${id}`), {
+              method: "DELETE"
+          });
+
+          if (res.ok) {
+              await loadAssets(); // Recarrega a lista
+              if (onUpdate) onUpdate(); // Atualiza os gráficos gerais
+          } else {
+              alert("Erro ao excluir ativo.");
+          }
+      } catch (error) {
+          console.error("Erro ao deletar:", error);
+      }
+  };
+
   return (
     <div className="grid gap-6 md:grid-cols-12">
       
+      {/* FORMULÁRIO (ESQUERDA) */}
       <Card className="md:col-span-4 bg-zinc-900 border-zinc-800 h-fit">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-amber-400">
@@ -165,7 +179,7 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
                     className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 uppercase pr-8"
                     value={newAsset.symbol}
                     onChange={e => setNewAsset({...newAsset, symbol: e.target.value.toUpperCase()})}
-                    onBlur={handleTickerBlur} // <--- A MÁGICA ACONTECE AQUI
+                    onBlur={handleTickerBlur} 
                 />
                 {searchingTicker && (
                     <div className="absolute right-3 top-3">
@@ -231,6 +245,7 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
         </CardContent>
       </Card>
 
+      {/* LISTA (DIREITA) */}
       <Card className="md:col-span-8 bg-zinc-900 border-zinc-800">
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-zinc-100">
@@ -253,13 +268,12 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
                             <TableHead className="text-zinc-400">Atual</TableHead>
                             <TableHead className="text-zinc-400">Total</TableHead>
                             <TableHead className="text-zinc-400">Var %</TableHead>
+                            <TableHead className="text-zinc-400 text-right">Ações</TableHead> {/* Coluna Nova */}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {assets.map((asset) => {
-                            // Tenta pegar pelo nome exato OU pelo nome + .SA se falhar
                             const currentPrice = prices[asset.symbol] || prices[asset.symbol + ".SA"] || 0
-                            
                             const totalValue = currentPrice * asset.quantity
                             const variation = currentPrice > 0 ? ((currentPrice - asset.price_paid) / asset.price_paid) * 100 : 0
                             const isPositive = variation >= 0
@@ -287,6 +301,17 @@ export function RealPortfolio({ onUpdate }: RealPortfolioProps) {
                                                 {Math.abs(variation).toFixed(1)}%
                                             </div>
                                         )}
+                                    </TableCell>
+                                    {/* --- BOTÃO DE DELETAR --- */}
+                                    <TableCell className="text-right">
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-8 w-8 text-zinc-500 hover:text-red-500 hover:bg-red-500/10"
+                                            onClick={() => handleDelete(asset.id, asset.symbol)}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             )
