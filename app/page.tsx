@@ -5,43 +5,69 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RealPortfolio } from "@/components/RealPortfolio"
 import { Simulator } from "@/components/Simulator"
 import { Dashboard } from "@/components/Dashboard"
-import { getApiUrl } from "@/lib/api"
+import { getApiUrl, authFetch } from "@/lib/api"
 import CurrencyTicker from "@/components/CurrencyTicker";
+import { useRouter } from "next/navigation"
 
 export default function Home() {
-  const [portfolioData, setPortfolioData] = useState([])
+  // CORREÇÃO AQUI: Adicionado <any[]> para evitar o erro "never[]"
+  const [portfolioData, setPortfolioData] = useState<any[]>([])
+  const router = useRouter()
 
   const refreshData = async () => {
     try {
-      const res = await fetch(getApiUrl('/api/portfolio'))
+      // Usa authFetch para enviar o token junto
+      const res = await authFetch(getApiUrl('/api/portfolio'))
+      
+      // Se o token for inválido (401), redireciona pro login
+      if (res.status === 401) {
+         router.push("/login")
+         return
+      }
+
       const data = await res.json()
-      setPortfolioData(data)
-    } catch (e) { console.error(e) }
+
+      // Proteção: Só salva se for realmente uma lista (Array)
+      if (Array.isArray(data)) {
+          setPortfolioData(data)
+      } else {
+          console.error("Erro: API não retornou uma lista", data)
+          setPortfolioData([]) 
+      }
+    } catch (e) { 
+        console.error("Erro ao buscar dados:", e)
+        setPortfolioData([]) 
+    }
   }
 
-  useEffect(() => { refreshData() }, [])
+  // Verifica login ao carregar a página
+  useEffect(() => { 
+      const token = localStorage.getItem("goldrush_token")
+      if (!token) {
+          router.push("/login")
+      } else {
+          refreshData() 
+      }
+  }, [])
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-8">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* --- CABEÇALHO (Título + Ticker) --- */}
+        {/* --- CABEÇALHO --- */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-start gap-6 mb-8 w-full">
           
-          {/* Título: Fixo, não encolhe (shrink-0) */}
           <h1 className="text-3xl font-bold text-amber-400 tracking-tighter whitespace-nowrap shrink-0">
             GoldRush <span className="text-zinc-600 text-lg font-normal">| Manager</span>
           </h1>
 
-          {/* Ticker: Ocupa todo o espaço restante (flex-1) e permite scroll (min-w-0) */}
           <div className="flex-1 min-w-0 w-full overflow-hidden">
             <CurrencyTicker />
           </div>
 
         </div>
-        {/* ----------------------------------- */}
 
-        {/* MENU PRINCIPAL (Abas) */}
+        {/* --- MENU PRINCIPAL (Abas) --- */}
         <Tabs defaultValue="dashboard" className="w-full">
           <TabsList className="grid w-full grid-cols-3 bg-zinc-900 border border-zinc-800 h-12">
             <TabsTrigger 

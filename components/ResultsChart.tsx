@@ -11,11 +11,11 @@ interface SimulationPoint {
 
 interface ResultsChartProps {
   data: SimulationPoint[];
-  currency?: string; // NOVO: Aceita a moeda (opcional, padrão BRL)
+  currency?: string;
 }
 
 export function ResultsChart({ data, currency = "BRL" }: ResultsChartProps) {
-  // Define o símbolo com base na prop
+
   const symbol = currency === "USD" ? "$" : "R$";
 
   return (
